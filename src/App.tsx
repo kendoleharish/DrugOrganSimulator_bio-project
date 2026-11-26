@@ -1,21 +1,26 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Scene } from './components/3d/Scene';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { usePageMotion } from './hooks/usePageMotion';
 import { Header } from './components/ui/Header';
 import { DissectionControls } from './components/ui/DissectionControls';
 import { ClinicalOrganDossier } from './components/ui/ClinicalOrganDossier';
-import { MLToxicityCard } from './components/ui/MLToxicityCard';
 import { TimelineController } from './components/ui/TimelineController';
 import { SpeciesComparisonModal } from './components/ui/SpeciesComparisonModal';
 import { ReportModal } from './components/ui/ReportModal';
+import { ScenarioComparison } from './components/ui/ScenarioComparison';
 
 import { BENCHMARK_DRUGS } from './engine/drugs_dataset';
-import { runPharmacokineticSimulation } from './engine/pharmacokinetics';
-import { DrugProfile, Species, PatientPhenotype, SimulationResult } from './engine/types';
+import { defaultRoute, runPharmacokineticSimulation } from './engine/pharmacokinetics';
+import { AdministrationRoute, DrugProfile, Species, PatientPhenotype, SimulationResult } from './engine/types';
 import { AnatomySex, PhysiologicalSystem } from './types/ui';
 
+const Scene = React.lazy(() => import('./components/3d/Scene').then(module => ({ default: module.Scene })));
+
 export const App: React.FC = () => {
+  const workspace = useRef<HTMLDivElement>(null);
+  usePageMotion(workspace);
   // Core Pharmacokinetic Parameters
   const [selectedDrug, setSelectedDrug] = useState<DrugProfile>(BENCHMARK_DRUGS[0]);
+  const [route, setRoute] = useState<AdministrationRoute>('oral');
   const [species, setSpecies] = useState<Species>('human');
   const [phenotype, setPhenotype] = useState<PatientPhenotype>('healthy_adult');
   const [dosageMg, setDosageMg] = useState<number>(500);
@@ -23,7 +28,7 @@ export const App: React.FC = () => {
 
   // Simulation Timeline Playback
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
-  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
 
   // 3D Anatomical Navigation & Dissection State
@@ -49,6 +54,8 @@ export const App: React.FC = () => {
   const [viewPreset, setViewPreset] = useState<{ id: string; trigger: number } | null>(null);
   const [focusTrigger, setFocusTrigger] = useState<number>(0);
   const [stressHeatmapVisible, setStressHeatmapVisible] = useState<boolean>(true);
+  const [toolsOpen, setToolsOpen] = useState<boolean>(false);
+  const [inspectorOpen, setInspectorOpen] = useState<boolean>(true);
 
   // Modals
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
@@ -62,9 +69,9 @@ export const App: React.FC = () => {
       species,
       phenotype,
       dosingIntervalHours,
-      dosingIntervalHours > 0 ? 48 : 24
+      dosingIntervalHours > 0 ? 48 : 24, route
     );
-  }, [selectedDrug, dosageMg, species, phenotype, dosingIntervalHours]);
+  }, [selectedDrug, dosageMg, species, phenotype, dosingIntervalHours, route]);
 
   // Run Human & Rodent Models in parallel for Species Comparison Analysis
   const humanComparisonResult: SimulationResult = useMemo(() => {
@@ -74,9 +81,9 @@ export const App: React.FC = () => {
       'human',
       'healthy_adult',
       0,
-      24
+      24, route
     );
-  }, [selectedDrug, dosageMg]);
+  }, [selectedDrug, dosageMg, route]);
 
   const mouseComparisonResult: SimulationResult = useMemo(() => {
     return runPharmacokineticSimulation(
@@ -85,13 +92,14 @@ export const App: React.FC = () => {
       'rodent',
       'healthy_adult',
       0,
-      24
+      24, route
     );
-  }, [selectedDrug, dosageMg]);
+  }, [selectedDrug, dosageMg, route]);
 
   // Handle drug switch: reset dosage to default standard dose
   const handleSelectDrug = (drug: DrugProfile) => {
     setSelectedDrug(drug);
+    setRoute(defaultRoute(drug));
     setDosageMg(drug.standardDoseMg);
     setCurrentStepIndex(0);
   };
@@ -152,7 +160,7 @@ export const App: React.FC = () => {
   }, []);
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#090b10] select-none text-slate-100 font-sans">
+    <div ref={workspace} className={`workspace-shell ${toolsOpen ? 'tools-visible' : 'tools-hidden'} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} relative w-screen h-screen overflow-hidden bg-[#090b10] select-none text-slate-100 font-sans`}>
       {/* 1. Clinical Navigation Bar */}
       <Header
         selectedDrug={selectedDrug}
@@ -174,11 +182,16 @@ export const App: React.FC = () => {
         }}
         onOpenReport={() => setIsReportOpen(true)}
         onOpenSpeciesModal={() => setIsSpeciesModalOpen(true)}
+        toolsOpen={toolsOpen}
+        inspectorOpen={inspectorOpen}
+        onToggleTools={() => setToolsOpen(value => !value)}
+        onToggleInspector={() => setInspectorOpen(value => !value)}
       />
 
       {/* 2. Full-Viewport 3D Anatomical WebGL Canvas */}
-      <main className="w-full h-full">
-        <Scene
+      <main className="scene-parallax w-full h-full">
+        <div className="stage-intro" data-reveal><div><h1>Explore drug disposition.</h1><p>Educational research · calculated systemic PK</p></div><ScenarioComparison result={simulationResult} /></div>
+        <React.Suspense fallback={<div className="scene-loading" role="status">Preparing the anatomy viewer…</div>}><Scene
           currentStep={currentStep}
           sex={sex}
           dissectionDepth={dissectionDepth}
@@ -191,7 +204,7 @@ export const App: React.FC = () => {
           stressHeatmapVisible={stressHeatmapVisible}
           onSelectKey={handleSelectKey}
           onHoverKey={setHoveredKey}
-        />
+        /></React.Suspense>
       </main>
 
       {/* 3. Left Anatomical Dissection & Viewport Controls Deck */}
@@ -209,8 +222,6 @@ export const App: React.FC = () => {
         onClearIsolation={() => setIsolatedKey(null)}
       />
 
-      {/* 4. Machine Learning Predictive Toxicology Summary Card */}
-      <MLToxicityCard prediction={simulationResult.mlPrediction} />
 
       {/* 5. Right Clinical Organ Dossier & Structure Directory */}
       <ClinicalOrganDossier
@@ -226,6 +237,8 @@ export const App: React.FC = () => {
 
       {/* 6. Bottom Pharmacokinetic Timeline Scrubber & Dose Configurator */}
       <TimelineController
+        route={route}
+        onRouteChange={next => { setRoute(next); setCurrentStepIndex(0); }}
         currentStepIndex={safeStepIndex}
         totalSteps={simulationResult.timeline.length}
         currentStep={currentStep}

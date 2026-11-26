@@ -9,7 +9,7 @@ export const BENCHMARK_DRUGS: DrugProfile[] = [
   {
     id: 'paracetamol',
     name: 'Paracetamol (Acetaminophen)',
-    description: 'Everyday antipyretic & analgesic. Safe at 500mg, but at overdose (>4000mg) depletes liver glutathione, causing toxic NAPQI metabolite accumulation and fatal hepatic necrosis.',
+    description: "Analgesic. Includes a simplified hepatic oxidation and glutathione conjugation calculation.",
     standardDoseMg: 500,
     maxDailySafeDoseMg: 3000,
     properties: {
@@ -22,6 +22,7 @@ export const BENCHMARK_DRUGS: DrugProfile[] = [
       tpsa: 49.33,
       cypAffinity: 0.75 // Oxidized by CYP2E1 into NAPQI
     },
+    oralBioavailability: 0.68,
     absorptionRateKa: 1.5, // Rapid GI absorption
     volumeOfDistributionVd: 0.95, // L/kg
     baseHepaticClearance: 18.0, // L/hr (primarily liver)
@@ -38,7 +39,7 @@ export const BENCHMARK_DRUGS: DrugProfile[] = [
   {
     id: 'ibuprofen',
     name: 'Ibuprofen (NSAID)',
-    description: 'Non-steroidal anti-inflammatory. Inhibits COX-1/COX-2. At high or chronic doses, strips protective stomach mucus and constricts renal arterioles, causing acute kidney injury.',
+    description: "Anti-inflammatory drug. Exploratory parent-drug kinetics only.",
     standardDoseMg: 400,
     maxDailySafeDoseMg: 1200,
     properties: {
@@ -66,7 +67,7 @@ export const BENCHMARK_DRUGS: DrugProfile[] = [
   {
     id: 'caffeine',
     name: 'Caffeine',
-    description: 'Central Nervous System stimulant. Crosses the Blood-Brain Barrier with near 100% efficiency. Overdosing leads to tachycardia, cardiac dysrhythmias, and severe tremors.',
+    description: "Stimulant. Exploratory parent-drug kinetics only.",
     standardDoseMg: 100,
     maxDailySafeDoseMg: 400,
     properties: {
@@ -94,7 +95,7 @@ export const BENCHMARK_DRUGS: DrugProfile[] = [
   {
     id: 'doxorubicin',
     name: 'Doxorubicin (Chemotherapy)',
-    description: 'Potent anthracycline antitumor antibiotic. Highly effective against malignancies, but infamous for life-threatening cumulative, irreversible cardiotoxicity.',
+    description: "Anthracycline. Exploratory intravenous parent-drug kinetics only.",
     standardDoseMg: 60,
     maxDailySafeDoseMg: 75,
     properties: {

@@ -9,9 +9,11 @@ import {
   Sliders,
   CheckCircle2
 } from 'lucide-react';
-import { DrugProfile, SimulationTimeStep } from '../../engine/types';
+import { AdministrationRoute, DrugProfile, SimulationTimeStep } from '../../engine/types';
 
 interface TimelineControllerProps {
+  route: AdministrationRoute;
+  onRouteChange: (value: AdministrationRoute) => void;
   currentStepIndex: number;
   totalSteps: number;
   currentStep: SimulationTimeStep;
@@ -30,7 +32,7 @@ interface TimelineControllerProps {
 
 export const TimelineController: React.FC<TimelineControllerProps> = ({
   currentStepIndex,
-  totalSteps,
+  totalSteps, route, onRouteChange,
   currentStep,
   isPlaying,
   playbackSpeed,
@@ -44,9 +46,9 @@ export const TimelineController: React.FC<TimelineControllerProps> = ({
   onChangeDosage,
   onChangeInterval
 }) => {
-  const isOverdose = dosageMg > drug.maxDailySafeDoseMg;
-  const hours = Math.floor(currentStep.timeHours);
-  const minutes = Math.round((currentStep.timeHours - hours) * 60);
+  const elapsedMinutes = Math.round(currentStep.timeHours * 60);
+  const hours = Math.floor(elapsedMinutes / 60);
+  const minutes = elapsedMinutes % 60;
 
   return (
     <div className="absolute bottom-4 left-4 right-4 z-20 px-4 py-3 rounded-xl bg-slate-950/85 border border-white/10 shadow-2xl backdrop-blur-md text-xs select-none">
@@ -87,6 +89,7 @@ export const TimelineController: React.FC<TimelineControllerProps> = ({
               {[0.5, 1.0, 2.0, 4.0].map((spd) => (
                 <button
                   key={spd}
+                  aria-pressed={playbackSpeed === spd}
                   onClick={() => onSetSpeed(spd)}
                   className={`px-1.5 py-0.5 rounded font-medium transition-all ${
                     playbackSpeed === spd
@@ -100,26 +103,9 @@ export const TimelineController: React.FC<TimelineControllerProps> = ({
             </div>
           </div>
 
-          {/* Center: Systemic Health / Toxicity Alert Status */}
-          <div className="hidden md:flex items-center space-x-2">
-            {currentStep.systemicAlert ? (
-              <div className="px-2.5 py-1 rounded-lg bg-rose-950/60 border border-rose-500/40 text-rose-300 text-[11px] flex items-center space-x-1.5 animate-pulse">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
-                <span className="font-semibold">{currentStep.systemicAlert}</span>
-              </div>
-            ) : isOverdose ? (
-              <div className="px-2.5 py-1 rounded-lg bg-amber-950/60 border border-amber-500/40 text-amber-300 text-[11px] flex items-center space-x-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                <span>Overdose Protocol Active ({dosageMg} mg &gt; Safe {drug.maxDailySafeDoseMg} mg)</span>
-              </div>
-            ) : (
-              <div className="px-2.5 py-1 rounded-lg bg-slate-900 border border-white/10 text-slate-300 text-[11px] flex items-center space-x-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Therapeutic Window Maintained</span>
-              </div>
-            )}
-          </div>
-
+          <label className="route-control">Route <select aria-label="Administration route" value={route} disabled={drug.id === 'doxorubicin'} onChange={e => onRouteChange(e.target.value as AdministrationRoute)}>
+            {drug.id !== 'doxorubicin' && <option value="oral">Oral</option>}<option value="iv">IV bolus</option>
+          </select></label>
           {/* Right: Dosage & Interval Controls */}
           <div className="flex items-center space-x-3">
             {/* Dosing Interval */}
@@ -134,6 +120,7 @@ export const TimelineController: React.FC<TimelineControllerProps> = ({
                 ].map((inv) => (
                   <button
                     key={inv.label}
+                    aria-pressed={dosingIntervalHours === inv.val}
                     onClick={() => onChangeInterval(inv.val)}
                     className={`px-2 py-0.5 rounded transition-all ${
                       dosingIntervalHours === inv.val
@@ -149,15 +136,16 @@ export const TimelineController: React.FC<TimelineControllerProps> = ({
 
             {/* Dose Slider */}
             <div className="flex items-center space-x-2 pl-2 border-l border-white/10">
-              <span className="text-[11px] text-slate-400 font-medium">Dose:</span>
-              <span className={`font-mono font-bold text-xs ${isOverdose ? 'text-rose-400' : 'text-cyan-300'}`}>
+              <span className="text-[11px] text-slate-400 font-medium">70 kg reference dose:</span>
+              <span className="font-mono font-bold text-xs text-cyan-300">
                 {dosageMg} mg
               </span>
               <input
                 type="range"
-                min={Math.max(50, Math.floor(drug.standardDoseMg * 0.25))}
+                aria-label="Reference dose in milligrams"
+                min={0}
                 max={Math.min(5000, Math.floor(drug.standardDoseMg * 6))}
-                step={50}
+                step={1}
                 value={dosageMg}
                 onChange={(e) => onChangeDosage(Number(e.target.value))}
                 className="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
@@ -170,6 +158,7 @@ export const TimelineController: React.FC<TimelineControllerProps> = ({
         <div className="relative flex items-center pt-1">
           <input
             type="range"
+            aria-label="Simulation time"
             min={0}
             max={totalSteps - 1}
             value={currentStepIndex}

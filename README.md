@@ -1,86 +1,42 @@
-# 🧬 InSilico-3D: Interactive Multi-Organ Drug Pharmacokinetics & Toxicity Simulator
+# InSilico-3D
 
-> A computational alternative to preclinical animal testing featuring full 3D human anatomical visualization and physiologically-based pharmacokinetic (PBPK) simulation.
+An educational React and TypeScript workstation for exploring drug disposition alongside interactive male and female anatomical models. Select a drug, administration route and schedule, inspect the simulated plasma curve, and explore structures with the 3D dissection controls. The species comparison contrasts equal mg/kg scenarios. The PDF records the current simulation settings and results.
 
-[![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?style=flat&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![React](https://img.shields.io/badge/React-18.3-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev/)
-[![Three.js](https://img.shields.io/badge/Three.js-0.168-black?style=flat&logo=three.js&logoColor=white)](https://threejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=flat&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+## Run locally
 
----
+Use a recent Node.js LTS installation with npm.
 
-## 🔬 Overview
-
-InSilico-3D addresses the core reason **over 90% of drugs passing animal testing fail in human clinical trials**: interspecies biological discrepancies, reactive metabolite hepatotoxicity, and multi-organ cascading failures. 
-
-Aligned with the **US FDA Modernization Act 2.0**, InSilico-3D replaces animal testing with:
-1. **Interactive 3D Human Anatomy:** Authentic NIH/BodyParts3D anatomical meshes across 10 physiological systems and 147 segmented structures with progressive layer dissection (skin, muscles, skeleton, vascular, viscera).
-2. **Coupled Pharmacokinetic ODE Engine:** 5-compartment absorption, distribution, metabolism, and excretion (ADME) simulation.
-3. **Reactive Metabolite & Glutathione (GSH) Tracking:** Real-time simulation of Phase I CYP450 oxidation vs. Phase II glucuronidation, tracking toxic NAPQI formation and liver necrosis.
-4. **Cardiorenal Cross-Talk:** Coupled systemic feedback loop where renal injury throttles clearance, backing up blood concentrations and triggering secondary cardiotoxicity.
-5. **Kleiber's Law Allometric Interspecies Engine ($M^{0.75}$):** Side-by-side human vs. rodent comparison demonstrating animal trial false-negatives.
-
----
-
-## 🏛️ Key Features
-
-- **3D Anatomical Dissection:** Continuous 0%–100% dissection slider peeling skin $\rightarrow$ muscles $\rightarrow$ skeleton $\rightarrow$ deep viscera.
-- **10 Physiological Systems:** Independent exploration of Integumentary, Muscular, Skeletal, Nervous, Cardiovascular, Respiratory, Digestive, Urinary, Endocrine, and Reproductive systems.
-- **Depth-Aware Raycasting:** Point-and-click organ selection with cursor-tracking clinical telemetry badges (Latin names, FMA IDs, real-time exposure).
-- **Benchmark Drug Library:** Pre-configured profiles for Paracetamol, Ibuprofen, Caffeine, and Doxorubicin (chemotherapy), plus a custom molecular builder.
-- **Clinical Telemetry & Dossier:** Real-time plasma curves ($C_{\max}, T_{\max}$), liver ALT/AST, kidney eGFR, and exportable regulatory preclinical dossiers (PDF/Print).
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js (v18 or higher)
-- npm or yarn
-
-### Installation & Run
-
-```bash
-# Clone the repository
-git clone https://github.com/<YOUR_USERNAME>/bio-project.git
-cd bio-project
-
-# Install dependencies
-npm install
-
-# Start local development server
+```sh
+npm ci
 npm run dev
 ```
 
-Visit `http://localhost:3000` in your browser.
+Open the local address printed by Vite. Use a WebGL-capable browser for the 3D viewport.
 
-### Build for Production
+## Verification
 
-```bash
+```sh
+npm test
+npm run validate
 npm run build
-npm run preview
 ```
 
----
+## Scientific scope
 
-## 🧪 Scientific & Mathematical Verification
+The oral depot and apparent central distribution volume describe systemic pharmacokinetics. Liver and kidney overlays track elimination. A human paracetamol example illustrates NAPQI formation and glutathione demand. The atlas includes many additional structures for anatomical exploration. The simulator supports teaching and model comparison. It cannot determine a safe dose, predict injury or guide care.
 
-Run the automated clinical pharmacology test suite:
+- [Model assumptions and parameter register](docs/MODEL_ASSUMPTIONS.md)
+- [Validation experiment and limitations](docs/VALIDATION.md)
+- [Scientific references](docs/REFERENCES.md)
 
-```bash
-npx tsx src/engine/test_engine.ts
-```
+## Research tools
 
-All 4 benchmark scenarios verify against clinical pharmacology data:
-- ✅ **Paracetamol 500mg Therapeutic:** Glutathione buffer 100% intact, healthy liver.
-- ✅ **Paracetamol 4000mg Overdose:** Glutathione depleted to 8%, reactive NAPQI spikes, hepatotoxicity triggered.
-- ✅ **Mouse Model Interspecies Comparison:** Rapid allometric clearance leaves mouse liver healthy at human-toxic equivalent doses.
-- ✅ **Ibuprofen 1600mg Renal Cross-Talk:** Renal eGFR falls to 17%, throttling whole-body clearance.
+Research a drug retrieves a confirmed PubChem identity and molecular descriptors. Its experimental model estimates human IV half-life using a fixed 15-neighbor regressor trained on PKSmart data. The interface shows held-out error and applicability limits. The model has limited accuracy, with median held-out fold error of 2.46. This estimate has its own equation-derived elimination illustration. The benchmark simulator continues to use its explicit parameter profiles.
 
----
+Methods & evidence contains equations, the parameter register, published comparison data, ML evaluation, and anatomy credits. Compare doses displays half/reference/double input scenarios. Compare displays human/mouse curves and parameter ratios. Export report provides PDF and scenario JSON.
 
-## 📄 Regulatory Context
+To reproduce ML training with Python, install scripts/requirements-ml.txt and run python scripts/train_pk.py from this directory. The frozen CSV, repository license, evaluation metadata, and source digest are in data/research. The browser model is public/research/half-life-model.json.
 
-- **US FDA Modernization Act 2.0 (S.5002):** Authorizes the use of alternatives to animal testing, including in silico computational models and organ-on-a-chip technologies, for drug applications.
-- **NIH Tox21 & ClinTox Benchmarks:** QSAR molecular descriptor rules incorporated for predictive organ toxicology.
+The body assets are educational anatomical atlas models. Attribution and licensing are in public/models and visible in Methods & evidence. Inter typography is bundled with its font license in public/fonts.
+
+Figma tool quota prevented completing the editable Figma artifact. The local app and desktop/mobile screenshots in docs provide the current design reference. Framer workspace availability was checked. The runnable implementation remains in this React project.

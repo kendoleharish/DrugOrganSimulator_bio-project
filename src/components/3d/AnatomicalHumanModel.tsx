@@ -8,6 +8,7 @@ import {
   ANATOMY_STRUCTURES, 
   AnatomySex 
 } from 'open-anatomy-3d';
+import { anatomyMetric, dispositionBand, DISPOSITION_COLORS } from '../../engine/anatomyMetrics';
 import { SimulationTimeStep } from '../../engine/types';
 import { 
   PhysiologicalSystem, 
@@ -46,8 +47,7 @@ export interface AnatomicalHumanModelProps {
 // Pre-allocated colors to avoid memory churn and garbage collection pauses in useFrame
 const HOVER_HIGHLIGHT_COLOR = new THREE.Color('#38bdf8'); // Medical Cyan
 const SELECT_HIGHLIGHT_COLOR = new THREE.Color('#06b6d4'); // Electric Cyan
-const TOXIC_COLOR = new THREE.Color('#dc2626');           // Toxic Necrosis Crimson
-const STRESS_COLOR = new THREE.Color('#d97706');          // Cellular Stress Amber
+const MODEL_COLORS = DISPOSITION_COLORS.map(color => new THREE.Color(color));
 const ZERO_COLOR = new THREE.Color('#000000');
 
 export const SYSTEM_DEFAULT_OPACITIES: Record<PhysiologicalSystem, number> = {
@@ -339,113 +339,24 @@ export const AnatomicalHumanModel: React.FC<AnatomicalHumanModelProps> = ({
     }
   }, [dissectionDepth, systemVisibility, systemOpacity, isolatedKey, partsMap]);
 
-  // Update static material colors and highlight emissions when selection or hover state changes
   useEffect(() => {
     for (const part of partsMap.values()) {
-      const isHovered = part.key === hoveredKey;
-      const isSelected = part.key === selectedKey;
-      const isIsolated = part.key === isolatedKey;
-
-      // Extract real pharmacokinetic state from currentStep
-      let organState = null;
-      if (currentStep) {
-        if (part.key === 'liver' || part.key === 'gallbladder') {
-          organState = currentStep.organs.liver;
-        } else if (part.key === 'heart' || part.key === 'coronary_arteries') {
-          organState = currentStep.organs.heart;
-        } else if (part.key === 'kidney_l' || part.key === 'kidney_r' || part.key === 'bladder') {
-          organState = currentStep.organs.kidneys;
-        } else if (part.key === 'brain' || part.key === 'brainstem' || part.key === 'cerebellum') {
-          organState = currentStep.organs.brain;
-        } else if (part.key === 'stomach' || part.key === 'small_intestine' || part.key === 'colon') {
-          organState = currentStep.organs.stomach;
-        }
-      }
-
+      const metric = stressHeatmapVisible && currentStep ? anatomyMetric(part.key, currentStep) : undefined;
+      const band = metric && currentStep ? dispositionBand(metric.amountMg, currentStep.administeredMg) : -1;
+      const color = MODEL_COLORS[band];
+      const highlight = part.key === hoveredKey ? HOVER_HIGHLIGHT_COLOR
+        : part.key === selectedKey || part.key === isolatedKey ? SELECT_HIGHLIGHT_COLOR : undefined;
       for (const mat of part.materials) {
-        const baseColor = (mat.userData.baseColor as THREE.Color) || new THREE.Color(part.color);
-
-        if (stressHeatmapVisible && organState) {
-          if (organState.colorState === 'toxic') {
-            mat.color.copy(baseColor).lerp(TOXIC_COLOR, 0.65);
-            mat.emissive.copy(TOXIC_COLOR);
-            mat.emissiveIntensity = isHovered || isSelected ? 0.75 : 0.4;
-          } else if (organState.colorState === 'stressed') {
-            mat.color.copy(baseColor).lerp(STRESS_COLOR, 0.45);
-            mat.emissive.copy(STRESS_COLOR);
-            mat.emissiveIntensity = isHovered || isSelected ? 0.65 : 0.3;
-          } else {
-            // Healthy physiological state
-            mat.color.copy(baseColor);
-            if (isHovered) {
-              mat.emissive.copy(HOVER_HIGHLIGHT_COLOR);
-              mat.emissiveIntensity = 0.6;
-            } else if (isSelected || isIsolated) {
-              mat.emissive.copy(SELECT_HIGHLIGHT_COLOR);
-              mat.emissiveIntensity = 0.45;
-            } else {
-              mat.emissive.copy(ZERO_COLOR);
-              mat.emissiveIntensity = 0;
-            }
-          }
-        } else {
-          // Normal interactive state without PK stress heatmap
-          mat.color.copy(baseColor);
-          if (isHovered) {
-            mat.emissive.copy(HOVER_HIGHLIGHT_COLOR);
-            mat.emissiveIntensity = 0.6;
-          } else if (isSelected || isIsolated) {
-            mat.emissive.copy(SELECT_HIGHLIGHT_COLOR);
-            mat.emissiveIntensity = 0.45;
-          } else {
-            mat.emissive.copy(ZERO_COLOR);
-            mat.emissiveIntensity = 0;
-          }
-        }
+        mat.color.copy(mat.userData.baseColor as THREE.Color);
+        if (color) mat.color.lerp(color, 0.67);
+        mat.emissive.copy(highlight ?? color ?? ZERO_COLOR);
+        mat.emissiveIntensity = highlight ? 0.5 : color ? 0.18 : 0;
       }
     }
   }, [partsMap, hoveredKey, selectedKey, isolatedKey, stressHeatmapVisible, currentStep]);
 
-  // Per-Frame Animation: Cellular Stress Pulse for actively stressed/toxic organs
   useFrame(({ clock }) => {
-    const time = clock.getElapsedTime();
-    if (skinMaterialRef.current) {
-      skinMaterialRef.current.uniforms.uTime.value = time;
-    }
-
-    if (!stressHeatmapVisible || !currentStep) return;
-
-    for (const part of partsMap.values()) {
-      let organState = null;
-      if (part.key === 'liver' || part.key === 'gallbladder') {
-        organState = currentStep.organs.liver;
-      } else if (part.key === 'heart' || part.key === 'coronary_arteries') {
-        organState = currentStep.organs.heart;
-      } else if (part.key === 'kidney_l' || part.key === 'kidney_r' || part.key === 'bladder') {
-        organState = currentStep.organs.kidneys;
-      } else if (part.key === 'brain' || part.key === 'brainstem' || part.key === 'cerebellum') {
-        organState = currentStep.organs.brain;
-      } else if (part.key === 'stomach' || part.key === 'small_intestine' || part.key === 'colon') {
-        organState = currentStep.organs.stomach;
-      }
-
-      if (!organState || organState.colorState === 'healthy') continue;
-
-      const isHovered = part.key === hoveredKey;
-      const isSelected = part.key === selectedKey;
-
-      if (organState.colorState === 'toxic') {
-        const pulse = 0.25 + 0.25 * Math.sin(time * 3.5);
-        for (const mat of part.materials) {
-          mat.emissiveIntensity = isHovered || isSelected ? 0.8 : pulse;
-        }
-      } else if (organState.colorState === 'stressed') {
-        const pulse = 0.15 + 0.15 * Math.sin(time * 2.5);
-        for (const mat of part.materials) {
-          mat.emissiveIntensity = isHovered || isSelected ? 0.7 : pulse;
-        }
-      }
-    }
+    if (skinMaterialRef.current) skinMaterialRef.current.uniforms.uTime.value = clock.getElapsedTime();
   });
 
   // Natural Medical Raycast Picking:

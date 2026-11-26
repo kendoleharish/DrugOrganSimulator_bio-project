@@ -1,0 +1,55 @@
+{
+  "version": "human-half-life-knn-v1",
+  "target": "Human intravenous terminal half-life",
+  "unit": "h",
+  "features": [
+    "MW",
+    "HBA",
+    "HBD",
+    "TPSA_NO"
+  ],
+  "neighbors": 15,
+  "mean": [
+    395.0476643073812,
+    6.910010111223458,
+    2.411526794742164,
+    97.1835187057634
+  ],
+  "scale": [
+    176.5655760864807,
+    4.116969113485578,
+    2.3576797463158576,
+    65.38361530234435
+  ],
+  "minimum": [
+    42.04,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "maximum": [
+    1180.04,
+    36.0,
+    22.0,
+    574.3
+  ],
+  "trainingCount": 989,
+  "testCount": 244,
+  "sourceRows": 1283,
+  "usableRows": 1265,
+  "sourceSHA256": "2e4140dbd0a34970a91643feb13b9ddfb469bf5934e3c6f2b44f2500bd1840de",
+  "source": "https://github.com/srijitseal/PKSmart",
+  "metrics": {
+    "log10MAE": 0.43545070006956693,
+    "log10RMSE": 0.5411737616145706,
+    "medianFoldError": 2.460440281808741,
+    "baselineLog10MAE": 0.46041194994503654
+  },
+  "limitations": [
+    "Human intravenous records only. Mouse and oral outcomes are outside evaluation.",
+    "Descriptor-group holdout does not establish generalization to new chemical scaffolds.",
+    "TPSA and hydrogen-bond descriptors may differ across calculation systems.",
+    "Neighbor spread is descriptive and is not a calibrated confidence interval.",
+    "No organ injury or tissue concentration target was trained."
+  ]
+}

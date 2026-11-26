@@ -1,6 +1,6 @@
-import React, { Suspense, useState, useMemo, useCallback } from 'react';
+import React, { Suspense, useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import * as THREE from 'three';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import { StudioEnvironment } from './StudioEnvironment';
 import { AnatomicalHumanModel } from './AnatomicalHumanModel';
 import { CameraRig } from './CameraRig';
@@ -9,8 +9,52 @@ import {
   AnatomySystem, 
   ORGAN_INFO_MAP 
 } from '../../types/ui';
+import { Html, useGLTF } from '@react-three/drei';
+import { anatomyMetric } from '../../engine/anatomyMetrics';
 import { SimulationTimeStep } from '../../engine/types';
 import { ANATOMY_BY_KEY } from 'open-anatomy-3d';
+
+interface AnatomyViewportProps {
+  sex: AnatomySex;
+  children: React.ReactNode;
+}
+
+class AnatomyViewport extends React.Component<AnatomyViewportProps, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  retry = () => {
+    useGLTF.clear('/models/anatomy-' + this.props.sex + '.glb');
+    this.setState({ failed: false });
+  };
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="absolute inset-0 grid place-content-center gap-3 text-center">
+          <p role="alert">Could not display the 3D anatomy.</p>
+          <button type="button" onClick={this.retry} className="underline">Retry viewer</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+interface StructureBounds {
+  center: THREE.Vector3;
+  radius: number;
+}
+
+function ResumeRendering({ active }: { active: boolean }) {
+  const invalidate = useThree(state => state.invalidate);
+  const size = useThree(state => state.size);
+  useEffect(() => { if (active) invalidate(); }, [active, size.width, size.height, invalidate]);
+  return null;
+}
 
 interface SceneProps {
   currentStep: SimulationTimeStep;
@@ -43,10 +87,31 @@ export const Scene: React.FC<SceneProps> = ({
   onSelectKey,
   onHoverKey
 }) => {
-  const [structuresMap, setStructuresMap] = useState<Map<string, any>>(new Map());
+  const [webGlAvailable] = useState(() => {
+    try {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+      if (!context) return false;
+      context.getExtension('WEBGL_lose_context')?.loseContext();
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  const stage = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(true);
+  const [tabActive, setTabActive] = useState(!document.hidden);
+  useEffect(() => {
+    const update = () => setTabActive(!document.hidden);
+    document.addEventListener('visibilitychange', update);
+    const observer = new IntersectionObserver(entries => setVisible(entries[0].isIntersecting));
+    if (stage.current) observer.observe(stage.current);
+    return () => { document.removeEventListener('visibilitychange', update); observer.disconnect(); };
+  }, []);
+  const [structuresMap, setStructuresMap] = useState<Map<string, StructureBounds>>(new Map());
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
 
-  const handleStructuresDiscovered = useCallback((map: Map<string, any>) => {
+  const handleStructuresDiscovered = useCallback((map: Map<string, StructureBounds>) => {
     setStructuresMap(map);
   }, []);
 
@@ -85,40 +150,9 @@ export const Scene: React.FC<SceneProps> = ({
     const catalogInfo = ANATOMY_BY_KEY[hoveredKey];
     const clinicalInfo = ORGAN_INFO_MAP[hoveredKey];
 
-    // Determine PK status
-    let pkStatus = 'Physiological';
-    let concentrationText = '';
-
-    if (currentStep) {
-      if (hoveredKey === 'liver' || hoveredKey === 'gallbladder') {
-        const s = currentStep.organs.liver;
-        concentrationText = `${s.concentration.toFixed(1)} mg/L`;
-        pkStatus = s.colorState === 'toxic' ? 'Toxic Necrosis' : s.colorState === 'stressed' ? 'Cellular Stress' : 'Normal Reserve';
-      } else if (hoveredKey === 'heart' || hoveredKey === 'coronary_arteries') {
-        const s = currentStep.organs.heart;
-        concentrationText = `${s.concentration.toFixed(1)} mg/L`;
-        pkStatus = s.colorState === 'toxic' ? 'High Cardiotoxicity Risk' : s.colorState === 'stressed' ? 'Elevated Cardiac Strain' : 'Normal Rhythm';
-      } else if (hoveredKey === 'kidney_l' || hoveredKey === 'kidney_r' || hoveredKey === 'bladder') {
-        const s = currentStep.organs.kidneys;
-        concentrationText = `${s.concentration.toFixed(1)} mg/L`;
-        pkStatus = s.colorState === 'toxic' ? 'Renal Impairment' : s.colorState === 'stressed' ? 'Filtration Stress' : 'Normal Clearance';
-      } else if (hoveredKey === 'brain' || hoveredKey === 'brainstem' || hoveredKey === 'cerebellum') {
-        const s = currentStep.organs.brain;
-        concentrationText = `${s.concentration.toFixed(1)} mg/L`;
-        pkStatus = s.colorState === 'toxic' ? 'CNS Depression' : 'Active Homeostasis';
-      } else if (hoveredKey === 'stomach' || hoveredKey === 'small_intestine' || hoveredKey === 'colon') {
-        const s = currentStep.organs.stomach;
-        concentrationText = `${s.concentration.toFixed(1)} mg/L`;
-        pkStatus = s.colorState === 'toxic' ? 'Gastric Irritation' : 'Normal Digestion';
-      } else if (hoveredKey.includes('lung') || hoveredKey === 'bronchi' || hoveredKey === 'trachea') {
-        concentrationText = `${(currentStep.plasmaConcentrationMgL * 0.95).toFixed(1)} mg/L`;
-        pkStatus = currentStep.plasmaConcentrationMgL > 15 ? 'Pulmonary Capillary Strain' : 'Alveolar Perfusion Safe';
-      } else if (catalogInfo?.system === 'vessels' || hoveredKey === 'aorta') {
-        concentrationText = `${currentStep.plasmaConcentrationMgL.toFixed(1)} mg/L`;
-        pkStatus = 'Systemic Arterial Distribution';
-      }
-    }
-
+    const metric = anatomyMetric(hoveredKey, currentStep);
+    const concentrationText = metric ? metric.amountMg.toFixed(2) + ' mg' : '';
+    const pkStatus = metric?.label ?? 'Anatomy only';
     return {
       label: catalogInfo?.label || clinicalInfo?.name || hoveredKey,
       system: catalogInfo?.system || clinicalInfo?.system || 'Anatomical Structure',
@@ -129,17 +163,22 @@ export const Scene: React.FC<SceneProps> = ({
   }, [hoveredKey, currentStep]);
 
   return (
-    <div 
+    <div ref={stage}
       className="relative w-full h-full cursor-grab active:cursor-grabbing select-none bg-[#090b10]"
       onPointerLeave={() => {
         onHoverKey(null);
         setHoverPosition(null);
       }}
     >
+      {webGlAvailable ? <AnatomyViewport key={sex} sex={sex}>
       <Canvas
-        camera={{ position: [0, 0.95, 3.2], fov: 40 }}
+        frameloop={visible && tabActive ? 'demand' : 'never'}
+        dpr={[1, 1.5]}
+        fallback={<p className="scene-loading">WebGL is unavailable. Simulation controls remain accessible.</p>}
+        camera={{ position: [0, 0.95, 2.2], fov: 40 }}
         gl={{ 
           antialias: true, 
+          preserveDrawingBuffer: true,
           alpha: false, 
           powerPreference: 'high-performance',
           toneMapping: THREE.ACESFilmicToneMapping,
@@ -147,7 +186,9 @@ export const Scene: React.FC<SceneProps> = ({
         }}
         onPointerMissed={() => onSelectKey(null)}
       >
-        <Suspense fallback={null}>
+        <color attach="background" args={['#000000']} />
+        <ResumeRendering active={visible && tabActive} />
+        <Suspense fallback={<Html center><span className="scene-loading">Loading anatomyâ€¦</span></Html>}>
           <StudioEnvironment />
 
           <AnatomicalHumanModel
@@ -176,6 +217,7 @@ export const Scene: React.FC<SceneProps> = ({
           />
         </Suspense>
       </Canvas>
+      </AnatomyViewport> : <p className="scene-loading" role="status">WebGL is unavailable. Simulation controls remain accessible.</p>}
 
       {/* Floating Medical Raycast Badge tracking cursor position */}
       {hoveredKey && hoveredInfo && hoverPosition && (
@@ -189,7 +231,7 @@ export const Scene: React.FC<SceneProps> = ({
           <div className="flex items-center space-x-1.5 mb-0.5">
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
             <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-              {hoveredInfo.system} · {hoveredInfo.category}
+              {hoveredInfo.system} Â· {hoveredInfo.category}
             </span>
           </div>
           <div className="text-sm font-semibold text-white tracking-tight">
@@ -197,19 +239,15 @@ export const Scene: React.FC<SceneProps> = ({
           </div>
           {hoveredInfo.concentrationText && (
             <div className="mt-1 pt-1 border-t border-slate-800 flex items-center justify-between space-x-3 text-[11px] font-mono">
-              <span className="text-slate-400">Exposure:</span>
+              <span className="text-slate-400">Modeled amount</span>
               <span className="text-cyan-300 font-bold">{hoveredInfo.concentrationText}</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                hoveredInfo.pkStatus.includes('Toxic') || hoveredInfo.pkStatus.includes('High') ? 'bg-rose-950 text-rose-300 border border-rose-800' :
-                hoveredInfo.pkStatus.includes('Stress') || hoveredInfo.pkStatus.includes('Strain') ? 'bg-amber-950 text-amber-300 border border-amber-800' :
-                'bg-emerald-950 text-emerald-300 border border-emerald-800'
-              }`}>
+              <span className="text-[10px] text-slate-300">
                 {hoveredInfo.pkStatus}
               </span>
             </div>
           )}
           <div className="text-[9px] text-slate-400 mt-1 italic">
-            Click to focus & inspect clinical parameters
+            Click to inspect structure
           </div>
         </div>
       )}

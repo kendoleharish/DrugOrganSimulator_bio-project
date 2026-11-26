@@ -1,3 +1,4 @@
+import { PlasmaChart } from './PlasmaChart';
 import React, { useState, useMemo } from 'react';
 import { 
   Activity, 
@@ -16,6 +17,7 @@ import {
   Info,
   Dna
 } from 'lucide-react';
+import { anatomyMetric } from '../../engine/anatomyMetrics';
 import { ORGAN_INFO_MAP } from '../../types/ui';
 import { 
   SimulationTimeStep, 
@@ -46,7 +48,7 @@ export const ClinicalOrganDossier: React.FC<ClinicalOrganDossierProps> = ({
   onFocusCamera
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Vital Organs');
 
   // Filtered structures for anatomical directory
   const filteredStructures = useMemo(() => {
@@ -74,7 +76,7 @@ export const ClinicalOrganDossier: React.FC<ClinicalOrganDossierProps> = ({
       list = list.filter((s) => s.label.toLowerCase().includes(q) || s.key.toLowerCase().includes(q));
     }
 
-    return list.slice(0, 45);
+    return list;
   }, [searchQuery, selectedCategory]);
 
   // Selected structure details lookup
@@ -83,66 +85,7 @@ export const ClinicalOrganDossier: React.FC<ClinicalOrganDossierProps> = ({
     const catalogInfo = ANATOMY_BY_KEY[selectedKey];
     const clinicalInfo = ORGAN_INFO_MAP[selectedKey];
 
-    // PK exposure data
-    let organState = null;
-    let biomarkerLabel = '';
-    let biomarkerValue = '';
-
-    if (selectedKey === 'liver' || selectedKey === 'gallbladder') {
-      organState = currentStep.organs.liver;
-      biomarkerLabel = 'Glutathione (GSH) Reserve';
-      biomarkerValue = `${(organState.glutathioneReservePct ?? 100).toFixed(0)}%`;
-    } else if (selectedKey === 'heart' || selectedKey === 'coronary_arteries') {
-      organState = currentStep.organs.heart;
-      biomarkerLabel = 'Cardiomyocyte Perfusion';
-      biomarkerValue = `${organState.concentration.toFixed(1)} mg/L`;
-    } else if (selectedKey === 'kidney_l' || selectedKey === 'kidney_r' || selectedKey === 'bladder' || selectedKey.startsWith('ureter')) {
-      organState = currentStep.organs.kidneys;
-      biomarkerLabel = 'eGFR Filtration Efficiency';
-      biomarkerValue = `${(organState.filtrationEfficiencyPct ?? 100).toFixed(0)}%`;
-    } else if (selectedKey === 'brain' || selectedKey === 'brainstem' || selectedKey === 'cerebellum') {
-      organState = currentStep.organs.brain;
-      biomarkerLabel = 'BBB Permeability';
-      biomarkerValue = `${(drug.properties.logP > 1.5 ? 85 : 18)}%`;
-    } else if (selectedKey === 'stomach' || selectedKey === 'small_intestine' || selectedKey === 'colon') {
-      organState = currentStep.organs.stomach;
-      biomarkerLabel = 'Enteral Mucosal Exposure';
-      biomarkerValue = `${organState.concentration.toFixed(1)} mg/L`;
-    } else if (selectedKey.includes('lung') || selectedKey === 'bronchi' || selectedKey === 'trachea' || selectedKey === 'larynx') {
-      const pulmonaryExposure = currentStep.plasmaConcentrationMgL * 0.95;
-      const stress = Math.min(1.0, currentStep.plasmaConcentrationMgL > 25 ? 0.7 : currentStep.plasmaConcentrationMgL > 12 ? 0.35 : 0.08);
-      organState = {
-        concentration: pulmonaryExposure,
-        stressLevel: stress,
-        colorState: stress > 0.65 ? ('toxic' as const) : stress > 0.25 ? ('stressed' as const) : ('healthy' as const)
-      };
-      biomarkerLabel = 'Alveolar PaO2 Reserve';
-      biomarkerValue = `${Math.round(98 - stress * 14)}% Sat`;
-    } else if (selectedKey === 'aorta' || catalogInfo?.system === 'vessels') {
-      organState = {
-        concentration: currentStep.plasmaConcentrationMgL,
-        stressLevel: Math.min(1.0, currentStep.plasmaConcentrationMgL / 35),
-        colorState: currentStep.plasmaConcentrationMgL > 30 ? ('toxic' as const) : currentStep.plasmaConcentrationMgL > 15 ? ('stressed' as const) : ('healthy' as const)
-      };
-      biomarkerLabel = 'Systemic Shear Stress';
-      biomarkerValue = `${(1.15 + currentStep.plasmaConcentrationMgL * 0.02).toFixed(2)} Pa`;
-    } else if (selectedKey === 'pancreas') {
-      organState = {
-        concentration: currentStep.plasmaConcentrationMgL * 0.8,
-        stressLevel: 0.12,
-        colorState: 'healthy' as const
-      };
-      biomarkerLabel = 'Islet Beta Reserve';
-      biomarkerValue = '96% Normal';
-    } else if (selectedKey === 'spleen') {
-      organState = {
-        concentration: currentStep.plasmaConcentrationMgL * 0.9,
-        stressLevel: 0.1,
-        colorState: 'healthy' as const
-      };
-      biomarkerLabel = 'Cordal Micro-perfusion';
-      biomarkerValue = '180 mL/min';
-    }
+    const metric = anatomyMetric(selectedKey, currentStep);
 
     return {
       key: selectedKey,
@@ -153,20 +96,18 @@ export const ClinicalOrganDossier: React.FC<ClinicalOrganDossierProps> = ({
       fmaId: clinicalInfo?.fmaId,
       description: clinicalInfo?.description || 'Segmented anatomical structure mapped from human physiological data.',
       primaryFunction: clinicalInfo?.primaryFunction || 'Integral physiological function within systemic human anatomy.',
-      clinicalSignificance: clinicalInfo?.clinicalSignificance || 'Monitored for drug distribution, tissue binding, and clearance.',
-      vulnerabilityFactor: clinicalInfo?.vulnerabilityFactor || 'Tissue-specific perfusion and metabolic exposure rate.',
-      organState,
-      biomarkerLabel,
-      biomarkerValue
+      clinicalSignificance: clinicalInfo?.clinicalSignificance || 'See anatomy references for this structure.',
+      vulnerabilityFactor: clinicalInfo?.vulnerabilityFactor || '',
+      metric
     };
   }, [selectedKey, currentStep, drug]);
 
   const isIsolated = isolatedKey === selectedKey && selectedKey !== null;
 
   return (
-    <aside 
+    <aside id="data-inspector" data-reveal
       aria-label="Clinical Organ Dossier and Pharmacokinetic Telemetry"
-      className="absolute top-16 right-4 z-20 w-84 max-w-[340px] rounded-xl bg-slate-950/85 border border-white/10 shadow-2xl backdrop-blur-md text-xs select-none flex flex-col max-h-[calc(100vh-140px)] transition-all duration-200"
+      className="workspace-inspector absolute top-16 right-4 z-20 w-84 max-w-[340px] rounded-xl bg-slate-950/85 border border-white/10 shadow-2xl backdrop-blur-md text-xs select-none flex flex-col max-h-[calc(100vh-140px)] transition-all duration-200"
     >
       {/* 1. SELECTED STRUCTURE DOSSIER VIEW */}
       {selectedKey && selectedDetails ? (
@@ -194,6 +135,7 @@ export const ClinicalOrganDossier: React.FC<ClinicalOrganDossierProps> = ({
               )}
             </div>
             <button
+              aria-label="Close selected structure"
               onClick={() => onSelectKey(null)}
               className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
             >
@@ -226,80 +168,15 @@ export const ClinicalOrganDossier: React.FC<ClinicalOrganDossierProps> = ({
 
           {/* Scrollable Content */}
           <div className="p-3 space-y-3 overflow-y-auto custom-scrollbar flex-1">
-            {/* Pharmacokinetic Cellular Exposure */}
-            {selectedDetails.organState ? (
-              <div className="p-3 rounded-xl bg-slate-900/90 border border-white/10 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-                    <Gauge className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Tissue Cellular Stress</span>
-                  </span>
-                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                    selectedDetails.organState.colorState === 'toxic'
-                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                      : selectedDetails.organState.colorState === 'stressed'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  }`}>
-                    {Math.round(selectedDetails.organState.stressLevel * 100)}% {selectedDetails.organState.colorState.toUpperCase()}
-                  </span>
-                </div>
-
-                {/* Progress bar */}
-                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-300 ${
-                      selectedDetails.organState.colorState === 'toxic'
-                        ? 'bg-rose-500'
-                        : selectedDetails.organState.colorState === 'stressed'
-                        ? 'bg-amber-500'
-                        : 'bg-cyan-500'
-                    }`}
-                    style={{ width: `${Math.max(5, Math.min(100, selectedDetails.organState.stressLevel * 100))}%` }}
-                  />
-                </div>
-
-                {/* Metrics Grid */}
-                <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
-                  <div className="p-2 rounded-lg bg-slate-950/60 border border-white/5">
-                    <div className="text-[10px] text-slate-400 uppercase">Tissue Exposure</div>
-                    <div className="font-mono font-bold text-cyan-300 text-xs">
-                      {selectedDetails.organState.concentration.toFixed(2)} <span className="text-[9px] font-normal text-slate-400">mg/L</span>
-                    </div>
-                  </div>
-
-                  {selectedDetails.biomarkerLabel && (
-                    <div className="p-2 rounded-lg bg-slate-950/60 border border-white/5">
-                      <div className="text-[10px] text-slate-400 uppercase truncate" title={selectedDetails.biomarkerLabel}>
-                        {selectedDetails.biomarkerLabel.split(' ')[0]}
-                      </div>
-                      <div className="font-mono font-bold text-emerald-300 text-xs truncate">
-                        {selectedDetails.biomarkerValue}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* NAPQI Reactive Metabolite Alert for Liver */}
-                {selectedKey === 'liver' && (selectedDetails.organState.activeMetaboliteLevel ?? 0) > 0.05 && (
-                  <div className="p-2 rounded-lg bg-rose-950/50 border border-rose-500/40 text-[10px] text-rose-300 flex items-start gap-1.5 mt-1.5">
-                    <ShieldAlert className="w-3.5 h-3.5 text-rose-400 flex-shrink-0 mt-0.5" />
-                    <span>
-                      Electrophilic NAPQI accumulation: {(selectedDetails.organState.activeMetaboliteLevel ?? 0).toFixed(1)} uM. Depleting cytosolic GSH!
-                    </span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="p-2.5 rounded-xl bg-slate-900/60 border border-white/5 text-[11px] text-slate-400">
-                <div className="flex items-center gap-1.5 text-slate-300 font-medium mb-1">
-                  <Activity className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Vascular Perfusion Compartment</span>
-                </div>
-                Tissue receives systemic arterial perfusion at current plasma concentration of {currentStep.plasmaConcentrationMgL.toFixed(2)} mg/L.
-              </div>
-            )}
-
+            <section className="data-section">
+              <h3>{selectedDetails.metric ? selectedDetails.metric.label : 'Anatomy only'}</h3>
+              {selectedDetails.metric ? <>
+                <strong>{selectedDetails.metric.amountMg.toFixed(2)} mg</strong>
+                <p>{selectedDetails.metric.detail}</p>
+                {selectedKey === 'liver' && currentStep.napqiFormationRateUmolH !== undefined &&
+                  <p>Illustrative NAPQI formation: {currentStep.napqiFormationRateUmolH.toFixed(2)} µmol/h. Cumulative GSH demand under complete conjugation: {currentStep.gshDemandUmol?.toFixed(2)} µmol.</p>}
+              </> : <p>Local exposure and biological effects are outside the model.</p>}
+            </section>
             {/* Anatomical Details & Physiology */}
             <div className="space-y-2 text-[11px] text-slate-300">
               <div>
@@ -320,23 +197,7 @@ export const ClinicalOrganDossier: React.FC<ClinicalOrganDossierProps> = ({
                 </p>
               </div>
 
-              <div>
-                <div className="text-[10px] uppercase font-bold tracking-wider text-rose-400/90 mb-0.5">
-                  Clinical Pharmacology & Toxicity
-                </div>
-                <p className="leading-relaxed text-slate-300 bg-rose-950/20 p-2 rounded-lg border border-rose-500/20">
-                  {selectedDetails.clinicalSignificance}
-                </p>
-              </div>
 
-              <div>
-                <div className="text-[10px] uppercase font-bold tracking-wider text-amber-400/90 mb-0.5">
-                  Organ Vulnerability Factor
-                </div>
-                <p className="leading-relaxed text-slate-300 bg-amber-950/20 p-2 rounded-lg border border-amber-500/20">
-                  {selectedDetails.vulnerabilityFactor}
-                </p>
-              </div>
             </div>
           </div>
         </div>
@@ -349,7 +210,7 @@ export const ClinicalOrganDossier: React.FC<ClinicalOrganDossierProps> = ({
               <div className="flex items-center space-x-2">
                 <Activity className="w-4 h-4 text-cyan-400" />
                 <span className="font-bold text-white tracking-wide uppercase text-[11px]">
-                  Clinical Telemetry
+                  Anatomy & pharmacokinetics
                 </span>
               </div>
               <span className="text-[10px] font-mono text-cyan-400 font-semibold px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30">
@@ -377,21 +238,11 @@ export const ClinicalOrganDossier: React.FC<ClinicalOrganDossierProps> = ({
               </div>
             </div>
 
-            {/* Systemic Alert Banner */}
-            {currentStep.systemicAlert ? (
-              <div className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-300 flex items-start space-x-2">
-                <AlertOctagon className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
-                <div className="text-[11px] leading-snug">
-                  {currentStep.systemicAlert}
-                </div>
-              </div>
-            ) : (
-              <div className="p-2 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-emerald-300 flex items-center space-x-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                <span className="text-[11px]">All vital organs compensated</span>
-              </div>
-            )}
-
+            <PlasmaChart result={simulationResult} />
+            <details className="model-notes"><summary>Model assumptions</summary>
+              <p>Well-mixed systemic compartment, first-order absorption and linear clearance. Organ colors track disposition. Tissue concentrations and injury are outside this model.</p>
+              <p>Absorption {drug.absorptionRateKa} h⁻¹ · apparent volume {drug.volumeOfDistributionVd} L/kg. Reference hepatic and renal clearance {drug.baseHepaticClearance} and {drug.baseRenalClearance} L/h. Oral availability {drug.oralBioavailability ?? 1}.</p>
+            </details>
             {/* Molecular Profile */}
             <div className="p-2.5 rounded-xl bg-slate-900/60 border border-white/5 space-y-1 text-[11px]">
               <div className="flex items-center justify-between text-slate-400 font-mono text-[10px]">
@@ -400,7 +251,7 @@ export const ClinicalOrganDossier: React.FC<ClinicalOrganDossierProps> = ({
               </div>
               <div className="flex items-center justify-between text-slate-400 font-mono text-[10px]">
                 <span>LogP: {drug.properties.logP}</span>
-                <span>Half-life: {drug.halfLifeHours}h</span>
+                <span>Route: {simulationResult.route.toUpperCase()}</span>
               </div>
             </div>
 
@@ -411,7 +262,7 @@ export const ClinicalOrganDossier: React.FC<ClinicalOrganDossierProps> = ({
                   <Layers className="w-3 h-3 text-cyan-400" />
                   <span>Structure Directory</span>
                 </span>
-                <span className="text-[9px] text-slate-400 font-mono">147 Structures</span>
+                <span className="text-[9px] text-slate-400 font-mono">{ANATOMY_STRUCTURES.length} structures</span>
               </div>
 
               {/* Search box */}
@@ -419,7 +270,7 @@ export const ClinicalOrganDossier: React.FC<ClinicalOrganDossierProps> = ({
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Filter organs, bones, vessels..."
+                  aria-label="Search structures" placeholder="Filter organs, bones, vessels..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-slate-900 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400"

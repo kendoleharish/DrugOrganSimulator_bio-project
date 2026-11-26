@@ -19,12 +19,12 @@ export const CameraRig: React.FC<CameraRigProps> = ({
   viewPreset,
   focusTrigger
 }) => {
-  const { camera } = useThree();
+  const { camera, invalidate } = useThree();
   const controlsRef = useRef<OrbitControlsImpl>(null);
 
   // Smooth interpolation state
   const isTransitioningRef = useRef<boolean>(false);
-  const targetCamPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0.95, 3.2));
+  const targetCamPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0.95, 2.8));
   const targetControlsTargetRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0.92, 0));
 
   // Initialize camera position
@@ -46,6 +46,7 @@ export const CameraRig: React.FC<CameraRigProps> = ({
       targetControlsTargetRef.current.set(...preset.target);
       targetCamPosRef.current.set(...preset.position);
       isTransitioningRef.current = true;
+      invalidate();
     }
   }, [presetKey, presetTrigger]);
 
@@ -63,11 +64,13 @@ export const CameraRig: React.FC<CameraRigProps> = ({
 
       targetCamPosRef.current.copy(targetCenter).add(currentDir);
       isTransitioningRef.current = true;
+      invalidate();
     } else if (targetCenter === null && !presetKey) {
       // Reset back to standing anatomical view
       targetControlsTargetRef.current.set(0, 0.92, 0);
-      targetCamPosRef.current.set(0, 0.95, 3.2);
+      targetCamPosRef.current.set(0, 0.95, 2.8);
       isTransitioningRef.current = true;
+      invalidate();
     }
   }, [targetCenter, targetDistance, focusTrigger]);
 
@@ -76,11 +79,12 @@ export const CameraRig: React.FC<CameraRigProps> = ({
     if (!controlsRef.current) return;
 
     if (isTransitioningRef.current) {
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       // Lerp target
-      controlsRef.current.target.lerp(targetControlsTargetRef.current, 0.08);
+      controlsRef.current.target.lerp(targetControlsTargetRef.current, reducedMotion ? 1 : 0.08);
 
       // Lerp camera position
-      camera.position.lerp(targetCamPosRef.current, 0.08);
+      camera.position.lerp(targetCamPosRef.current, reducedMotion ? 1 : 0.08);
 
       // Check if close enough to complete transition
       const targetDist = controlsRef.current.target.distanceTo(targetControlsTargetRef.current);
@@ -93,6 +97,7 @@ export const CameraRig: React.FC<CameraRigProps> = ({
       }
 
       controlsRef.current.update();
+      invalidate();
     }
   });
 

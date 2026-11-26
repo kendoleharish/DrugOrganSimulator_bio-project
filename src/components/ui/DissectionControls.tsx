@@ -86,9 +86,9 @@ export const DissectionControls: React.FC<DissectionControlsProps> = ({
   ];
 
   return (
-    <aside 
+    <aside id="anatomy-tools" data-reveal
       aria-label="Anatomical Dissection and Layer Controls"
-      className="absolute top-16 left-4 z-20 w-80 max-w-[320px] rounded-xl bg-slate-950/85 border border-white/10 shadow-2xl backdrop-blur-md text-xs select-none transition-all duration-200"
+      className="workspace-tools absolute top-16 left-4 z-20 w-80 max-w-[320px] rounded-xl bg-slate-950/85 border border-white/10 shadow-2xl backdrop-blur-md text-xs select-none transition-all duration-200"
     >
       {/* Deck Header */}
       <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-white/10">
@@ -215,7 +215,7 @@ export const DissectionControls: React.FC<DissectionControlsProps> = ({
               <div className="pt-2 border-t border-white/10 flex items-center justify-between">
                 <span className="text-[11px] text-slate-300 flex items-center gap-1.5">
                   <Activity className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>PK Cellular Stress Tint</span>
+                  <span>Drug disposition overlay</span>
                 </span>
                 <button
                   onClick={onToggleStressHeatmap}
@@ -229,6 +229,9 @@ export const DissectionControls: React.FC<DissectionControlsProps> = ({
                 </button>
               </div>
 
+              {stressHeatmapVisible && <p className="text-[10px] text-slate-300">Share of administered mass · GI depot, hepatic or renal elimination<br/>
+                <span style={{color:'#398b83'}}>■</span> &gt;0–&lt;10%　<span style={{color:'#58b8ac'}}>■</span> 10–&lt;50%　<span style={{color:'#a4ebda'}}>■</span> ≥50%
+              </p>}
               {/* Clear Isolation Banner if Active */}
               {isolatedKey && (
                 <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
